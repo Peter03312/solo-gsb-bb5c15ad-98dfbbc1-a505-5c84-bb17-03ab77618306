@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'stowage.db'}"
     api_prefix: str = "/api"
     app_name: str = "集装箱船配载方案核算服务"
+    # 启动升级时后到进程等待先到进程完成升级的最长时间（毫秒，仅 SQLite）
+    startup_lock_timeout_ms: int = 300_000
 
 
 @lru_cache

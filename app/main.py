@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -13,9 +14,11 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.config import get_settings
-from app.database import init_db
+from app.database import StartupError, init_db
 from app.routers import router
 from app.services import BlockedError, BusinessError, ConflictError
+
+logger = logging.getLogger("uvicorn.error")
 
 settings = get_settings()
 
@@ -39,7 +42,20 @@ def _json_safe(obj):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
+    try:
+        init_db()
+    except StartupError as exc:
+        # 升级未完成（等待写锁超时/SQL 失败）：打印可定位原因后中止启动，
+        # 绝不让部分升级的库对外提供服务。
+        logger.error("数据库启动升级失败，服务中止启动：%s", exc)
+        raise
+    except RuntimeError as exc:
+        # 历史库同号多份资料冲突：消息含具体冲突修订号，可定位处理。
+        logger.error("数据库启动前置检查未通过，服务中止启动：%s", exc)
+        raise
+    except Exception:
+        logger.exception("数据库启动升级发生未预期异常，服务中止启动")
+        raise
     yield
 
 

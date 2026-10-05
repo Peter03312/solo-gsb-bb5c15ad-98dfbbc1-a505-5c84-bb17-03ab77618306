@@ -52,6 +52,25 @@ class RevisionCounter(Base):
     )
 
 
+class SchemaMigration(Base):
+    """建表/旧库升级的迁移台账（每步迁移一行，迁移 ID 即版本号）。
+
+    全部升级步骤在同一个 SQLite ``BEGIN IMMEDIATE`` 写事务内执行并在提交
+    前写入本台账：两个进程同时启动时只有一个进程进入升级事务，后到进程
+    在写锁上等待，待升级提交后按台账识别“已完成”直接对外服务；升级事务
+    任一步骤中断（进程被杀/掉电）整体回滚，重启后库仍停留在升级前的一致
+    结构，重新升级成功前不对外服务。台账只追加、不删除，重复启动不会重复
+    补列回填或重复烧号。
+    """
+
+    __tablename__ = "schema_migrations"
+
+    revision: Mapped[str] = mapped_column(String(64), primary_key=True)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
 class SlotRevision(Base):
     __tablename__ = "slot_revisions"
 
