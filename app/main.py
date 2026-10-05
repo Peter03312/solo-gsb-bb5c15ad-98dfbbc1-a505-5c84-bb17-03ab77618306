@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,8 @@ from app.config import get_settings
 from app.database import init_db
 from app.routers import router
 from app.services import BlockedError, BusinessError, ConflictError
+
+logger = logging.getLogger("stowage.startup")
 
 settings = get_settings()
 
@@ -39,7 +42,13 @@ def _json_safe(obj):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        # 启动升级失败（写锁被占/资料冲突/升级步骤出错）：记录可定位原因后
+        # 重新抛出，使应用启动中止——绝不带着未完成升级的库对外提供服务。
+        logger.exception("启动失败：数据库初始化/升级未完成，服务中止")
+        raise
     yield
 
 
